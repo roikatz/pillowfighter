@@ -1,0 +1,6 @@
+/bin/
+/results/*.json
+/results/*.csv
+!/results/.gitkeep
+.DS_Store
+.claude/

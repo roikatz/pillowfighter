@@ -1,0 +1,30 @@
+# Sample cb-loadgen configuration. Copy to config.yaml and adjust, then run:
+#   cb-loadgen run --config config/config.yaml
+#
+# CLI flags always override values from this file; this file overrides the
+# built-in defaults. The password is intentionally left out here — set it via
+# --password or the CB_PASSWORD environment variable instead of committing it.
+
+connection-string: "couchbase://localhost?kv_pool_size=8"
+username: Administrator
+bucket: benchmark
+scope: _default
+collection: _default
+
+num-kv-connections: 8
+kv-timeout: 2.5s
+compression: true
+durability: none
+
+workload: mixed
+mix: "80:20"
+num-docs: 100000
+duration: 0s
+doc-size: 1024
+
+concurrency: 256
+warmup: 5s
+report-interval: 1s
+
+output: json
+output-file: results/run.json
