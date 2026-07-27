@@ -30,3 +30,11 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# cb-loadgen build output and run results
+/bin/
+/results/*.json
+/results/*.csv
+!/results/.gitkeep
+.DS_Store
+.claude/
