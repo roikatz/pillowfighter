@@ -60,7 +60,17 @@ type RunConfig struct {
 	Mix      string        `mapstructure:"mix"` // "read:write", e.g. "80:20"
 	NumDocs  int64         `mapstructure:"num-docs"`
 	Duration time.Duration `mapstructure:"duration"`
-	DocSize  int           `mapstructure:"doc-size"` // approximate padded document size in bytes, 0 = unpadded
+	// Infinite runs the workload until interrupted (Ctrl+C/SIGTERM) instead of
+	// stopping at NumDocs ops or after Duration. NumDocs, if set, still bounds
+	// the finite keyspace of documents cycled through; mutually exclusive with
+	// Duration.
+	Infinite bool `mapstructure:"infinite"`
+	// StartIndex offsets every document key index by this amount, so a run
+	// can target a fresh, non-overlapping range of keys instead of
+	// overwriting a previous run's data (e.g. a second 10M-doc write batch
+	// with --start-index 10000000 lands on keys 10000000..19999999).
+	StartIndex int64 `mapstructure:"start-index"`
+	DocSize    int   `mapstructure:"doc-size"` // approximate padded document size in bytes, 0 = unpadded
 
 	// Execution
 	Concurrency    int           `mapstructure:"concurrency"`
@@ -99,8 +109,15 @@ func (c RunConfig) Validate() error {
 	if c.Concurrency <= 0 {
 		return fmt.Errorf("concurrency must be > 0, got %d", c.Concurrency)
 	}
-	if c.NumDocs <= 0 && c.Duration <= 0 {
-		return fmt.Errorf("one of num-docs or duration must be set")
+	if c.StartIndex < 0 {
+		return fmt.Errorf("start-index must be >= 0, got %d", c.StartIndex)
+	}
+	if c.Infinite {
+		if c.Duration > 0 {
+			return fmt.Errorf("--infinite cannot be combined with --duration")
+		}
+	} else if c.NumDocs <= 0 && c.Duration <= 0 {
+		return fmt.Errorf("one of num-docs or duration must be set (or use --infinite)")
 	}
 	switch c.Workload {
 	case WorkloadWrite, WorkloadRead, WorkloadMixed:
@@ -140,6 +157,8 @@ func Defaults() RunConfig {
 		Workload:         WorkloadWrite,
 		Mix:              "80:20",
 		NumDocs:          10000,
+		Infinite:         false,
+		StartIndex:       0,
 		DocSize:          0,
 		Concurrency:      64,
 		Warmup:           0,
@@ -170,6 +189,8 @@ func Load(configFile string, flags *pflag.FlagSet) (RunConfig, error) {
 	v.SetDefault("mix", def.Mix)
 	v.SetDefault("num-docs", def.NumDocs)
 	v.SetDefault("duration", def.Duration)
+	v.SetDefault("infinite", def.Infinite)
+	v.SetDefault("start-index", def.StartIndex)
 	v.SetDefault("doc-size", def.DocSize)
 	v.SetDefault("concurrency", def.Concurrency)
 	v.SetDefault("warmup", def.Warmup)

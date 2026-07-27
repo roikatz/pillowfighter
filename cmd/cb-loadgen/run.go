@@ -43,8 +43,10 @@ func newRunCommand() *cobra.Command {
 
 	f.String("workload", string(def.Workload), "Workload type: write|read|mixed")
 	f.String("mix", def.Mix, "Read:write ratio for mixed workload, e.g. 80:20")
-	f.Int64("num-docs", def.NumDocs, "Total number of operations to run (0 to run by --duration instead)")
+	f.Int64("num-docs", def.NumDocs, "Total number of operations to run, or (with --infinite) the size of the finite keyspace to cycle through")
 	f.Duration("duration", def.Duration, "Run for this long instead of a fixed op count (0 to run by --num-docs instead)")
+	f.Bool("infinite", def.Infinite, "Run forever until interrupted (Ctrl+C/SIGTERM) instead of stopping at --num-docs or --duration; --num-docs still bounds the finite document keyspace (mutually exclusive with --duration)")
+	f.Int64("start-index", def.StartIndex, "Offset document key numbering by this amount, so a run targets a fresh key range instead of overwriting earlier data (e.g. --start-index 10000000)")
 	f.Int("doc-size", def.DocSize, "Approximate padded document size in bytes (0 = unpadded)")
 
 	f.Int("concurrency", def.Concurrency, "Number of worker goroutines / in-flight operations")

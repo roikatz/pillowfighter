@@ -73,7 +73,9 @@ Run `./bin/cb-loadgen run --help` for the full flag list. Key knobs:
 | `--kv-timeout`, `--compression`, `--durability` | gocb/gocbcore tuning |
 | `--workload write\|read\|mixed`, `--mix "80:20"` | Operation mix (read:write ratio, mixed only) |
 | `--num-docs` / `--duration` | Bound the run by op count or wall-clock time (set one) |
+| `--infinite` | Run until interrupted (Ctrl+C/SIGTERM) instead of stopping at `--num-docs`/`--duration`; mutually exclusive with `--duration`. `--num-docs`, if set, still bounds the finite keyspace of documents cycled through — the dataset never grows unbounded even though the run itself has no time/count limit |
 | `--concurrency` | Number of worker goroutines / in-flight ops — the primary throughput knob |
+| `--start-index` | Offset key numbering so a run writes a fresh, non-overlapping range instead of overwriting earlier data (e.g. a second 10M batch with `--start-index 10000000` lands on keys `10000000..19999999`) |
 | `--doc-size` | Approximate padded document size in bytes |
 | `--warmup` | Unmeasured warmup phase before the timed run starts |
 | `--output json\|csv`, `--output-file` | Where results land |

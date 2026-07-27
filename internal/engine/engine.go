@@ -55,10 +55,12 @@ type Result struct {
 
 // Run connects to the cluster per cfg, optionally seeds the keyspace for
 // read/mixed workloads, optionally warms up, then drives the measured run at
-// cfg.Concurrency until cfg.NumDocs operations complete or cfg.Duration
-// elapses (whichever the config specifies), honoring ctx cancellation
-// throughout. Progress snapshots are sent on the progress channel roughly
-// every cfg.ReportInterval if it is non-nil; Run never closes it.
+// cfg.Concurrency until cfg.NumDocs operations complete, cfg.Duration
+// elapses, or — if cfg.Infinite is set — ctx is cancelled (Ctrl+C/SIGTERM).
+// In every mode the document keyspace itself stays finite: keys wrap modulo
+// cfg.NumDocs (or a default size if unset), so --infinite never grows the
+// dataset unbounded. Progress snapshots are sent on the progress channel
+// roughly every cfg.ReportInterval if it is non-nil; Run never closes it.
 func Run(ctx context.Context, cfg config.RunConfig, progress chan<- Progress) (Result, error) {
 	if err := cfg.Validate(); err != nil {
 		return Result{}, fmt.Errorf("invalid config: %w", err)
@@ -90,8 +92,8 @@ func Run(ctx context.Context, cfg config.RunConfig, progress chan<- Progress) (R
 	}
 
 	if cfg.Workload != config.WorkloadWrite {
-		slog.Info("seeding keyspace before measured run", "keys", keyspace)
-		if err := seedKeyspace(ctx, target.Collection, keyspace, cfg.Concurrency, cfg.DocSize, durability); err != nil {
+		slog.Info("seeding keyspace before measured run", "keys", keyspace, "startIndex", cfg.StartIndex)
+		if err := seedKeyspace(ctx, target.Collection, keyspace, cfg.StartIndex, cfg.Concurrency, cfg.DocSize, durability); err != nil {
 			return Result{}, fmt.Errorf("seeding keyspace: %w", err)
 		}
 	}
@@ -173,13 +175,14 @@ func runPhase(
 			for idx := range jobs {
 				doRead := cfg.Workload == config.WorkloadRead ||
 					(cfg.Workload == config.WorkloadMixed && rng.IntN(100) < readPct)
+				keyIdx := cfg.StartIndex + idx%keyspace
 
 				start := time.Now()
 				var err error
 				if doRead {
-					err = workload.Read(collection, workload.KeyFor(idx%keyspace))
+					err = workload.Read(collection, workload.KeyFor(keyIdx))
 				} else {
-					err = workload.Write(collection, workload.KeyFor(idx%keyspace), idx, cfg.DocSize, durability)
+					err = workload.Write(collection, workload.KeyFor(keyIdx), keyIdx, cfg.DocSize, durability)
 				}
 				elapsed := time.Since(start)
 
@@ -200,8 +203,10 @@ func runPhase(
 	done := make(chan struct{})
 	go func() {
 		defer close(jobs)
-		if cfg.Duration > 0 && cfg.NumDocs <= 0 {
-			// Time-bounded: keep producing until ctx (the cfg.Duration timeout) fires.
+		if cfg.Infinite || (cfg.Duration > 0 && cfg.NumDocs <= 0) {
+			// Unbounded: keep producing until ctx fires — either cfg.Duration's
+			// timeout, or (for --infinite) the top-level Ctrl+C/SIGTERM context.
+			// Keys still wrap modulo keyspace, so the document set stays finite.
 			var idx int64
 			for {
 				select {
@@ -275,10 +280,11 @@ func reportProgress(ctx context.Context, done <-chan struct{}, interval time.Dur
 	}
 }
 
-// seedKeyspace writes every key in [0, keyspace) once, using its own bounded
-// worker pool. Individual write failures are logged and counted but do not
-// abort the seed pass; only a context cancellation returns an error.
-func seedKeyspace(ctx context.Context, collection *gocb.Collection, keyspace int64, concurrency int, docSize int, durability gocb.DurabilityLevel) error {
+// seedKeyspace writes every key in [startIndex, startIndex+keyspace) once,
+// using its own bounded worker pool. Individual write failures are logged and
+// counted but do not abort the seed pass; only a context cancellation returns
+// an error.
+func seedKeyspace(ctx context.Context, collection *gocb.Collection, keyspace, startIndex int64, concurrency int, docSize int, durability gocb.DurabilityLevel) error {
 	jobs := make(chan int64, concurrency*2)
 	var wg sync.WaitGroup
 	var failed atomic.Int64
@@ -298,7 +304,7 @@ func seedKeyspace(ctx context.Context, collection *gocb.Collection, keyspace int
 
 	go func() {
 		defer close(jobs)
-		for idx := int64(0); idx < keyspace; idx++ {
+		for idx := startIndex; idx < startIndex+keyspace; idx++ {
 			select {
 			case <-ctx.Done():
 				return
