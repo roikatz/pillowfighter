@@ -17,6 +17,7 @@ type Order struct {
 	Type      string    `json:"type"` // always "order"
 	OrderID   string    `json:"orderId"`
 	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"` // always >= CreatedAt
 	Status    string    `json:"status"`
 	Customer  Customer  `json:"customer"`
 	Items     []Item    `json:"items"`
@@ -66,6 +67,11 @@ type Totals struct {
 	Total    float64 `json:"total"`
 }
 
+// createdAtLookback is how far back an order's CreatedAt may be randomized
+// from the current time, giving documents a realistic spread of ages rather
+// than every document sharing the run's wall-clock timestamp.
+const createdAtLookback = 365 * 24 * time.Hour
+
 var (
 	statuses        = []string{"CONFIRMED", "PROCESSING", "SHIPPED", "DELIVERED", "CANCELLED"}
 	tiers           = []string{"BRONZE", "SILVER", "GOLD", "PLATINUM"}
@@ -94,10 +100,17 @@ func New(index int64, targetSize int) Order {
 	tax := subtotal * 0.08
 	shippingCost := gofakeit.Price(0, 25)
 
+	// Spread createdAt over the lookback window, then place updatedAt
+	// somewhere between that instant and now so the pair stays coherent.
+	now := time.Now()
+	createdAt := gofakeit.DateRange(now.Add(-createdAtLookback), now)
+	updatedAt := gofakeit.DateRange(createdAt, now)
+
 	order := Order{
 		Type:      "order",
 		OrderID:   fmt.Sprintf("order-%d-%s", index, gofakeit.UUID()),
-		CreatedAt: time.Now(),
+		CreatedAt: createdAt,
+		UpdatedAt: updatedAt,
 		Status:    gofakeit.RandomString(statuses),
 		Customer: Customer{
 			ID:    gofakeit.UUID(),

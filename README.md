@@ -84,6 +84,14 @@ For `read` and `mixed` workloads, `cb-loadgen` seeds the keyspace (writes every
 key once, unmeasured) before the timed run, since reads need existing
 documents. A pure `write` run needs no seeding — it *is* the population pass.
 
+### Generated documents
+
+Each document is an e-commerce `order` with nested customer, line-item,
+shipping, payment, and totals objects. `createdAt` is randomized across the
+past year and `updatedAt` is randomized between that instant and now, so a
+populated bucket has a realistic spread of document ages rather than every
+document sharing the run's wall-clock timestamp.
+
 ## Running
 
 Against a local cluster with the `benchmark` bucket:
