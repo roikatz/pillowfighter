@@ -20,6 +20,13 @@ workload: mixed
 mix: "80:20"
 num-docs: 100000
 duration: 0s
+# Run until interrupted (Ctrl+C/SIGTERM) instead of stopping at num-docs.
+# Mutually exclusive with duration; num-docs still bounds the finite keyspace.
+infinite: false
+# Offset key numbering so a run targets a fresh range instead of overwriting
+# earlier data (e.g. 10000000 writes keys 10000000..10099999 with the num-docs
+# above).
+start-index: 0
 doc-size: 1024
 
 concurrency: 256

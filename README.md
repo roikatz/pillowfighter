@@ -26,7 +26,7 @@ engine with no duplicated logic. **This first pass ships CLI-only** (see
 cmd/cb-loadgen/        cobra CLI: main.go (root), run.go (the `run` subcommand)
 internal/config/       RunConfig model + YAML/env/flag loader (viper), validation
 internal/connection/   gocb.Connect flow: kv_pool_size, KVTimeout, compression, durability
-internal/generator/    realistic e-commerce Order document generator (gofakeit)
+internal/generator/    realistic e-commerce Order document generator (gofakeit) + tests
 internal/workload/     Write / Read op implementations against a gocb.Collection
 internal/engine/       the reusable core: bounded worker pool, Run(ctx, cfg, progress)
 internal/metrics/      per-worker HdrHistogram + atomic counters, merge-on-demand
@@ -55,6 +55,9 @@ go mod tidy
 make build            # or: go build -o bin/cb-loadgen ./cmd/cb-loadgen
 ```
 
+Other Makefile targets: `make test` (run the suite), `make vet`, `make fmt`,
+`make run` (build, then run against `config/config.example.yaml`), `make clean`.
+
 ## Configuration
 
 Every setting can come from (in increasing precedence): built-in defaults →
@@ -78,7 +81,9 @@ Run `./bin/cb-loadgen run --help` for the full flag list. Key knobs:
 | `--start-index` | Offset key numbering so a run writes a fresh, non-overlapping range instead of overwriting earlier data (e.g. a second 10M batch with `--start-index 10000000` lands on keys `10000000..19999999`) |
 | `--doc-size` | Approximate padded document size in bytes |
 | `--warmup` | Unmeasured warmup phase before the timed run starts |
+| `--report-interval` | How often progress lines are printed during a run |
 | `--output json\|csv`, `--output-file` | Where results land |
+| `--config` | Path to a YAML config file; any flag above may be set there instead |
 
 For `read` and `mixed` workloads, `cb-loadgen` seeds the keyspace (writes every
 key once, unmeasured) before the timed run, since reads need existing
